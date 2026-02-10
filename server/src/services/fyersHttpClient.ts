@@ -1,5 +1,6 @@
 import axios from "axios";
 import { fyersTokenManager } from "./fyersTokenManager.service";
+import { fyersTokenStore } from "../storage/fyersTokenStore";
 
 export const fyersHttpClient = axios.create({
   baseURL: "https://api-t1.fyers.in/api/v3"
@@ -36,12 +37,20 @@ fyersHttpClient.interceptors.response.use(
       console.log("🔄 Attempting to refresh token and retry...");
       originalRequest._retry = true;
 
-      const newToken = await fyersTokenManager.refreshAccessToken();
+      try {
+        const newToken = await fyersTokenManager.refreshAccessToken();
 
-      originalRequest.headers.Authorization = `${process.env.FYERS_CLIENT_ID}:${newToken}`;
+        originalRequest.headers.Authorization = `${process.env.FYERS_CLIENT_ID}:${newToken}`;
 
-      console.log("🔁 Retrying request with new token...");
-      return fyersHttpClient(originalRequest);
+        console.log("🔁 Retrying request with new token...");
+        return fyersHttpClient(originalRequest);
+      } catch (refreshError: any) {
+        console.error("❌ Token refresh failed:", refreshError.response?.status || refreshError.message);
+        console.error("💡 If refresh keeps failing, you may need to re-authenticate at /auth/login");
+        
+        // Don't auto-clear tokens - let user decide when to re-authenticate
+        return Promise.reject(refreshError);
+      }
     }
 
     return Promise.reject(error);
