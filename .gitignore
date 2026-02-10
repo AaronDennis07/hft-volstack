@@ -6,3 +6,4 @@ node_modules
 .fyers-token.json
 
 /generated/prisma
+*.sql
