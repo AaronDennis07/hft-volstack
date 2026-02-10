@@ -1,0 +1,49 @@
+import axios from "axios";
+import { fyersTokenManager } from "./fyersTokenManager.service";
+
+export const fyersHttpClient = axios.create({
+  baseURL: "https://api-t1.fyers.in/api/v3"
+});
+
+/* Request interceptor */
+fyersHttpClient.interceptors.request.use(async (config) => {
+  const token = await fyersTokenManager.getValidAccessToken();
+
+  config.headers = config.headers || {};
+  config.headers.Authorization = `${process.env.FYERS_CLIENT_ID}:${token}`;
+
+  console.log(`🌐 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+  console.log(`🔑 Auth Header: ${process.env.FYERS_CLIENT_ID}:${token.substring(0, 20)}...`);
+
+  return config;
+});
+
+/* Response interceptor */
+fyersHttpClient.interceptors.response.use(
+  (response) => {
+    console.log(`✅ API Response: ${response.status} ${response.config.url}`);
+    return response;
+  },
+  async (error) => {
+    if (!error.config) return Promise.reject(error);
+
+    const originalRequest = error.config as any;
+    const status = error.response?.status;
+
+    console.log(`❌ API Error: ${status} ${originalRequest.url}`);
+
+    if (status === 401 && !originalRequest._retry) {
+      console.log("🔄 Attempting to refresh token and retry...");
+      originalRequest._retry = true;
+
+      const newToken = await fyersTokenManager.refreshAccessToken();
+
+      originalRequest.headers.Authorization = `${process.env.FYERS_CLIENT_ID}:${newToken}`;
+
+      console.log("🔁 Retrying request with new token...");
+      return fyersHttpClient(originalRequest);
+    }
+
+    return Promise.reject(error);
+  }
+);

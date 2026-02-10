@@ -1,0 +1,115 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Test{
+  id Int @id @default(autoincrement())
+  name String
+}
+
+model NiftySpot1Min {
+  timestamp DateTime @id
+  open      Decimal  @db.Decimal(10, 2)
+  high      Decimal  @db.Decimal(10, 2)
+  low       Decimal  @db.Decimal(10, 2)
+  close     Decimal  @db.Decimal(10, 2)
+  volume    BigInt?
+
+  @@map("nifty_spot_1min")
+}
+
+model HDFCSpot1Min {
+  timestamp DateTime @id
+  open      Decimal  @db.Decimal(10, 2)
+  high      Decimal  @db.Decimal(10, 2)
+  low       Decimal  @db.Decimal(10, 2)
+  close     Decimal  @db.Decimal(10, 2)
+  volume    BigInt?
+
+  @@map("hdfc_spot_1min")
+}
+
+model RILSpot1Min {
+  timestamp DateTime @id
+  open      Decimal  @db.Decimal(10, 2)
+  high      Decimal  @db.Decimal(10, 2)
+  low       Decimal  @db.Decimal(10, 2)
+  close     Decimal  @db.Decimal(10, 2)
+  volume    BigInt?
+
+  @@map("ril_spot_1min")
+}
+
+model ICICISpot1Min {
+  timestamp DateTime @id
+  open      Decimal  @db.Decimal(10, 2)
+  high      Decimal  @db.Decimal(10, 2)
+  low       Decimal  @db.Decimal(10, 2)
+  close     Decimal  @db.Decimal(10, 2)
+  volume    BigInt?
+
+  @@map("icici_spot_1min")
+}
+
+model INFYSpot1Min {
+  timestamp DateTime @id
+  open      Decimal  @db.Decimal(10, 2)
+  high      Decimal  @db.Decimal(10, 2)
+  low       Decimal  @db.Decimal(10, 2)
+  close     Decimal  @db.Decimal(10, 2)
+  volume    BigInt?
+
+  @@map("infy_spot_1min")
+}
+
+model TCSpot1Min {
+  timestamp DateTime @id
+  open      Decimal  @db.Decimal(10, 2)
+  high      Decimal  @db.Decimal(10, 2)
+  low       Decimal  @db.Decimal(10, 2)
+  close     Decimal  @db.Decimal(10, 2)
+  volume    BigInt?
+
+  @@map("tcs_spot_1min")
+}
+
+model BHARTIARTSpot1Min {
+  timestamp DateTime @id
+  open      Decimal  @db.Decimal(10, 2)
+  high      Decimal  @db.Decimal(10, 2)
+  low       Decimal  @db.Decimal(10, 2)
+  close     Decimal  @db.Decimal(10, 2)
+  volume    BigInt?
+
+  @@map("bhartiart_spot_1min")
+}
+
+model LTSpot1Min {
+  timestamp DateTime @id
+  open      Decimal  @db.Decimal(10, 2)
+  high      Decimal  @db.Decimal(10, 2)
+  low       Decimal  @db.Decimal(10, 2)
+  close     Decimal  @db.Decimal(10, 2)
+  volume    BigInt?
+
+  @@map("lt_spot_1min")
+}
+
+
+model IndiaVix1Min {
+  timestamp DateTime @id
+  close     Decimal? @db.Decimal(10, 2)
+
+  @@map("india_vix_1min")
+}
