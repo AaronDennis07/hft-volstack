@@ -1,5 +1,4 @@
 import { fyersHttpClient } from "./fyersHttpClient";
-import axios from "axios";
 
 class FyersApiService {
   async getProfile() {
@@ -34,33 +33,12 @@ class FyersApiService {
       range_to: convertDate(params.range_to)
     });
 
-
-    // Historical data uses /data/history path (not /api/v3)
-    // So we need to use a direct axios call with proper auth header
-    const { fyersTokenManager } = await import("./fyersTokenManager.service");
-    const token = await fyersTokenManager.getValidAccessToken();
-
-    try {
-      const response = await axios.get(
-        `https://api-t1.fyers.in/data/history?${queryParams.toString()}`,
-        {
-          headers: {
-            Authorization: `${process.env.FYERS_CLIENT_ID}:${token}`
-          }
-        }
-      );
-      return response.data;
-    } catch (error: any) {
-      if (error.response) {
-        console.error("❌ Fyers API Error:", {
-          status: error.response.status,
-          data: error.response.data,
-          params: params
-        });
-        throw new Error(`Fyers API returned ${error.response.status}: ${JSON.stringify(error.response.data)}`);
-      }
-      throw error;
-    }
+    // Use fyersHttpClient to benefit from automatic token refresh interceptor
+    // Pass full URL - axios will ignore baseURL when a full URL is provided
+    const response = await fyersHttpClient.get(
+      `https://api-t1.fyers.in/data/history?${queryParams.toString()}`
+    );
+    return response.data;
   }
 
 }
