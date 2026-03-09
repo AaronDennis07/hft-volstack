@@ -113,3 +113,18 @@ model IndiaVix1Min {
 
   @@map("india_vix_1min")
 }
+
+
+
+model StocksDaily {
+  timestamp DateTime
+  ticker    String
+  open      Decimal  @db.Decimal(10, 2)
+  high      Decimal  @db.Decimal(10, 2)
+  low       Decimal  @db.Decimal(10, 2)
+  close     Decimal  @db.Decimal(10, 2)
+  volume    BigInt?
+
+  @@id([timestamp, ticker])
+  @@map("stocks_daily")
+}

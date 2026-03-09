@@ -1537,6 +1537,191 @@ app.get('/getIndiaVixData', async (req, res) => {
   }
 });
 
+// =============================
+// STOCKS DAILY ENDPOINTS
+// =============================
+
+app.post('/syncStocksDaily', async (req, res) => {
+  try {
+    const { range_from, range_to, symbols } = req.body;
+
+    // Validate required parameters
+    if (!range_from || !range_to || !symbols) {
+      return res.status(400).json({
+        error: "Missing required parameters",
+        message: "Required: range_from (DD/MM/YYYY), range_to (DD/MM/YYYY), symbols (array of strings)",
+        example: { range_from: "01/01/2024", range_to: "31/03/2024", symbols: ["NSE:RELIANCE-EQ", "NSE:HDFCBANK-EQ"] }
+      });
+    }
+
+    if (!Array.isArray(symbols) || symbols.length === 0) {
+      return res.status(400).json({
+        error: "Invalid symbols parameter",
+        message: "symbols must be a non-empty array of Fyers symbol strings",
+        example: ["NSE:RELIANCE-EQ", "NSE:HDFCBANK-EQ", "NSE:INFY-EQ"]
+      });
+    }
+
+    const dateRegex = /^\d{2}\/\d{2}\/\d{4}$/;
+    if (!dateRegex.test(range_from) || !dateRegex.test(range_to)) {
+      return res.status(400).json({
+        error: "Invalid date format",
+        message: "Dates must be in DD/MM/YYYY format",
+        example: { range_from: "01/01/2024", range_to: "31/03/2024" }
+      });
+    }
+
+    console.log(`📊 Syncing daily data for ${symbols.length} symbols from ${range_from} to ${range_to}...`);
+
+    const results: Record<string, any> = {};
+
+    for (const symbol of symbols) {
+      console.log(`📈 Fetching daily data for ${symbol}...`);
+
+      try {
+        // Chunk if date range is > 90 days
+        const parseDate = (ddmmyyyy: string): Date => {
+          const [day, month, year] = ddmmyyyy.split('/').map(Number);
+          return new Date(year, month - 1, day);
+        };
+
+        const startDate = parseDate(range_from);
+        const endDate = parseDate(range_to);
+        const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+
+        const chunks = daysDiff > 365 ? chunkDateRange(range_from, range_to, 365) : [{ from: range_from, to: range_to }];
+
+        let inserted = 0;
+        let updated = 0;
+        let skipped = 0;
+        let totalCandles = 0;
+
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+
+          const data = await fyersApiService.getHistoricalData({
+            symbol: symbol,
+            resolution: "D",
+            range_from: chunk.from,
+            range_to: chunk.to
+          });
+
+          if (data.s !== "ok" || !data.candles) {
+            console.error(`❌ Failed to fetch ${symbol} chunk ${i + 1}: ${JSON.stringify(data)}`);
+            continue;
+          }
+
+          console.log(`📈 Received ${data.candles.length} daily candles for ${symbol} (chunk ${i + 1}/${chunks.length})`);
+          totalCandles += data.candles.length;
+
+          for (const candle of data.candles) {
+            const [timestamp, open, high, low, close, volume] = candle;
+
+            try {
+              await prisma.stocksDaily.upsert({
+                where: {
+                  timestamp_ticker: {
+                    timestamp: new Date(timestamp * 1000),
+                    ticker: symbol
+                  }
+                },
+                update: { open, high, low, close, volume: volume != null ? BigInt(volume) : null },
+                create: {
+                  timestamp: new Date(timestamp * 1000),
+                  ticker: symbol,
+                  open, high, low, close,
+                  volume: volume != null ? BigInt(volume) : null
+                }
+              });
+              inserted++;
+            } catch (error: any) {
+              if (error.code === 'P2002') {
+                updated++;
+              } else {
+                skipped++;
+                console.error(`Failed to upsert ${symbol} candle at ${new Date(timestamp * 1000)}:`, error.message);
+              }
+            }
+          }
+
+          // Rate limiting between chunks
+          if (i < chunks.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+
+        results[symbol] = { total: totalCandles, inserted, updated, skipped };
+      } catch (error: any) {
+        console.error(`❌ Error syncing ${symbol}:`, error.message);
+        results[symbol] = { error: error.message };
+      }
+
+      // Rate limiting between symbols
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    console.log(`✅ Daily sync complete for ${symbols.length} symbols`);
+
+    res.json({
+      success: true,
+      message: `Daily data synced for ${symbols.length} symbols`,
+      dateRange: { from: range_from, to: range_to },
+      results
+    });
+
+  } catch (error: any) {
+    console.error("❌ syncStocksDaily error:", error.message);
+
+    if (error.message === "Fyers token missing") {
+      return res.status(401).json({
+        error: "Not authenticated",
+        message: "Please login first at /auth/login"
+      });
+    }
+
+    res.status(500).json({
+      error: error.message || "Failed to sync daily stock data",
+      details: error.response?.data
+    });
+  }
+});
+
+app.get('/getStocksDaily', async (req, res) => {
+  try {
+    const { start_date, end_date, ticker, limit, order } = req.query;
+
+    let where: any = {};
+
+    if (start_date || end_date) {
+      where.timestamp = {};
+      if (start_date) where.timestamp.gte = new Date(start_date as string);
+      if (end_date) where.timestamp.lte = new Date(end_date as string);
+    }
+
+    if (ticker) {
+      const tickers = (ticker as string).split(',');
+      where.ticker = tickers.length === 1 ? tickers[0] : { in: tickers };
+    }
+
+    const data = await prisma.stocksDaily.findMany({
+      where,
+      orderBy: { timestamp: (order as string) === 'desc' ? 'desc' : 'asc' },
+      take: limit ? parseInt(limit as string) : undefined
+    });
+
+    res.json({
+      count: data.length,
+      data: data.map(d => ({
+        ...d,
+        volume: d.volume?.toString()
+      }))
+    });
+  } catch (error: any) {
+    console.error("❌ getStocksDaily error:", error.message);
+    res.status(500).json({ error: error.message || "Failed to fetch daily stock data" });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════════════╗
@@ -1590,6 +1775,12 @@ app.listen(PORT, () => {
 ║  🔄 BULK SYNC ALL STOCKS:                                         ║
 ║    POST http://localhost:${PORT}/syncAllStocks                         ║
 ║         Body: { range_from: "DD/MM/YYYY", range_to: "DD/MM/YYYY" }    ║
+║                                                                   ║
+║  📅 STOCKS DAILY:                                                  ║
+║    POST http://localhost:${PORT}/syncStocksDaily                       ║
+║         Body: { range_from, range_to, symbols: ["NSE:...", ...] }      ║
+║    GET  http://localhost:${PORT}/getStocksDaily                        ║
+║         ?ticker=NSE:RELIANCE-EQ&start_date=...&end_date=...           ║
 ║                                                                   ║
 ║  Query Parameters for GET endpoints:                              ║
 ║    ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&limit=100&order=asc     ║
