@@ -128,3 +128,18 @@ model StocksDaily {
   @@id([timestamp, ticker])
   @@map("stocks_daily")
 }
+
+
+
+model DailyPredictions {
+  id                   Int      @id @default(autoincrement())
+  target_date          DateTime @db.Date
+  prediction_timestamp DateTime @default(now())
+  ticker               String
+  conviction_score     Decimal  @db.Decimal(10, 5)
+  action               String?  // "LONG", "SHORT", or "NONE"
+  rank                 Int
+
+  @@unique([target_date, ticker]) // Prevents duplicate predictions for the same day
+  @@map("daily_predictions")
+}
